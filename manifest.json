@@ -1,0 +1,14 @@
+{
+  "method1": [
+    "videos/method1/vid001.mp4",
+    "videos/method1/vid002.mp4"
+  ],
+  "method2": [
+    "videos/method2/vid101.mp4",
+    "videos/method2/vid102.mp4"
+  ],
+  "method3": [
+    "videos/method3/vid201.mp4",
+    "videos/method3/vid202.mp4"
+  ]
+}

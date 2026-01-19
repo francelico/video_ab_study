@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Trial {{ trial_index + 1 }} / {{ n_trials }}</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 1.5rem; }
+    .topbar { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 1rem; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+    .panel { border: 1px solid #ddd; padding: 1rem; border-radius: 10px; }
+    video { width: 100%; max-height: 420px; background: #000; }
+    .metric { margin: 0.75rem 0; }
+    .metric label { display: block; font-weight: 600; margin-bottom: 0.25rem; }
+    .metric small { display: block; color: #555; margin-bottom: 0.4rem; }
+    input[type="range"] { width: 100%; }
+    .range-row { display: flex; justify-content: space-between; font-variant-numeric: tabular-nums; }
+    button { padding: 0.6rem 1rem; font-size: 1rem; }
+    .footer { margin-top: 1rem; display: flex; justify-content: flex-end; }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <h2>Trial {{ trial_index + 1 }} / {{ n_trials }}</h2>
+    <div>Rate after watching both videos.</div>
+  </div>
+
+  <div class="grid">
+    <div class="panel">
+      <h3>Video {{ left.label }}</h3>
+      <video controls preload="metadata">
+        <source src="{{ url_for('static', filename=left.video) }}" type="video/mp4" />
+        Your browser does not support the video tag.
+      </video>
+    </div>
+
+    <div class="panel">
+      <h3>Video {{ right.label }}</h3>
+      <video controls preload="metadata">
+        <source src="{{ url_for('static', filename=right.video) }}" type="video/mp4" />
+        Your browser does not support the video tag.
+      </video>
+    </div>
+  </div>
+
+  <form method="post" action="{{ url_for('submit') }}">
+    <div class="grid" style="margin-top: 1rem;">
+
+      <!-- Video A ratings -->
+      <div class="panel">
+        <h3>Ratings for Video {{ left.label }}</h3>
+
+        {% for m in metrics %}
+          <div class="metric">
+            <label>{{ m.name }}</label>
+            <small>{{ m.desc }}</small>
+
+            <input
+              type="range"
+              name="{{ m.key }}_A"
+              min="0"
+              max="10"
+              step="1"
+              value="5"
+              oninput="document.getElementById('{{ m.key }}_A_val').textContent = this.value;"
+              required
+            />
+
+            <div class="range-row">
+              <span>0</span>
+              <span>
+                Selected:
+                <strong id="{{ m.key }}_A_val">5</strong>
+              </span>
+              <span>10</span>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+
+      <!-- Video B ratings -->
+      <div class="panel">
+        <h3>Ratings for Video {{ right.label }}</h3>
+
+        {% for m in metrics %}
+          <div class="metric">
+            <label>{{ m.name }}</label>
+            <small>{{ m.desc }}</small>
+
+            <input
+              type="range"
+              name="{{ m.key }}_B"
+              min="0"
+              max="10"
+              step="1"
+              value="5"
+              oninput="document.getElementById('{{ m.key }}_B_val').textContent = this.value;"
+              required
+            />
+
+            <div class="range-row">
+              <span>0</span>
+              <span>
+                Selected:
+                <strong id="{{ m.key }}_B_val">5</strong>
+              </span>
+              <span>10</span>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+
+    </div>
+
+    <div class="footer">
+      <button type="submit">Next</button>
+    </div>
+  </form>
+</body>
+</html>

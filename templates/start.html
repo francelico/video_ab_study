@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Video Study</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 2rem; max-width: 900px; }
+    .box { border: 1px solid #ddd; padding: 1rem; border-radius: 8px; }
+    button { padding: 0.6rem 1rem; font-size: 1rem; }
+  </style>
+</head>
+<body>
+  <h1>Video Comparison Study</h1>
+
+  <div class="box">
+    <p>You will complete <strong>{{ n_trials }}</strong> comparisons.</p>
+    <p>For each comparison, you will watch two videos (A and B) and rate them on:</p>
+    <ul>
+      {% for m in metrics %}
+        <li><strong>{{ m.name }}</strong>: {{ m.desc }}</li>
+      {% endfor %}
+    </ul>
+
+    <form method="post" action="{{ url_for('begin') }}">
+      <button type="submit">Begin</button>
+    </form>
+  </div>
+</body>
+</html>
