@@ -27,6 +27,7 @@ TODO: deployment instructions.
 - Participant completes all trials: Their data is saved and included in `export.csv`. Reloading `http://localhost:5000` redirects them to `http://localhost:5000/done`. However killing and restarting the app lets them retake the study. In that case, new entries will be created in the database, with the same participant_id. Entries remain unique as the created_at_utc timestamp will be different.
 
 ## TODOs
+- [ ] Update structure of manifest so that videos are stored in `setA/method1/..., setB/method1/..., setC/method1/...`. For each individual A/B trial both video A and video B should come from the same set but different methods.
 - [ ] Add remote deployment instructions and test.
 - [ ] Protect /export.csv endpoint prior to remote deployment.
 - [ ] When running locally, add option to rerun study with a new participant_id to done.html.
