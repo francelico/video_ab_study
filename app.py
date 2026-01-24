@@ -19,9 +19,50 @@ LOCAL_DIR = os.path.dirname(os.path.abspath(__file__))
 PERSISTENT_STORAGE_DIR = os.environ.get("PERSISTENT_STORAGE_DIR", LOCAL_DIR)   # local dev defaults to repo dir
 DB_PATH = os.path.join(PERSISTENT_STORAGE_DIR, "results.sqlite3")
 MANIFEST_PATH = os.path.join(LOCAL_DIR, "manifest.json")
-EXPORT_TOKEN = os.environ.get("EXPORT_TOKEN", "")
+EXPORT_TOKEN = os.environ.get("EXPORT_TOKEN", "0")  # set EXPORT_TOKEN env variable to a secret value in production
+CONTACT_INFO= os.environ.get("CONTACT_INFO", "CONTACT")
+N_TRIALS_PER_PARTICIPANT = int(os.environ.get("N_TRIALS_PER_PARTICIPANT", 10))
 
-N_TRIALS_PER_PARTICIPANT = 10
+# Demographics
+DEMOGRAPHICS = [
+    {
+        "key": "AI_exp",
+        "question": "Do you work or study in AI or machine learning?",
+        "options": [
+            "Yes",
+            "No",
+        ],
+    },
+    {
+        "key": "game_exp",
+        "question": "How familiar are you with video games?",
+        "options": [
+            "Not at all",
+            "Casual player",
+            "Regular player",
+        ],
+    },
+    {
+        "key": "minecraft_exp",
+        "question": "How much experience do you have with Minecraft?",
+        "options": [
+            "I've never heard of Minecraft",
+            "I know what Minecraft is but have never played it",
+            "Less than 10 hours",
+            "10–100 hours",
+            "More than 100 hours",
+        ],
+    },
+    {
+        "key": "minetest_exp",
+        "question": "What is your experience with Luanti (formerly known as Minetest)?",
+        "options": [
+            "I have played it",
+            "I have heard of it but never played it",
+            "I have never heard of it",
+        ],
+    },
+]
 
 METRICS = [
     {
@@ -99,6 +140,21 @@ class Rating(db.Model):
     metric_b_B = db.Column(db.Integer, nullable=False)
     metric_c_B = db.Column(db.Integer, nullable=False)
     metric_d_B = db.Column(db.Integer, nullable=False)
+
+# -----------------------------
+# Demographics model
+# -----------------------------
+class DemographicResponse(db.Model):
+    __tablename__ = "demographics"
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    participant_id = db.Column(db.String(64), unique=True, nullable=False)
+    created_at_utc = db.Column(db.String(64), nullable=False)
+
+    # JSON blob of answers
+    responses_json = db.Column(db.Text, nullable=False)
+
 
 # -----------------------------
 # Manifest / sampling utilities
@@ -249,8 +305,7 @@ def ensure_participant():
 
 @app.route("/", methods=["GET"])
 def start():
-    return render_template("start.html", n_trials=N_TRIALS_PER_PARTICIPANT, metrics=METRICS)
-
+    return render_template("start.html", n_trials=N_TRIALS_PER_PARTICIPANT, metrics=METRICS, contact_info=CONTACT_INFO)
 
 @app.route("/begin", methods=["POST"])
 def begin():
@@ -261,7 +316,37 @@ def begin():
 
     # Optional: keep only the seed in session (tiny), or recompute later.
     session["seed"] = participant_seed(participant_id)
-    return redirect(url_for("trial"))
+    return redirect(url_for("demographics"))
+
+@app.route("/demographics", methods=["GET", "POST"])
+def demographics():
+    participant_id = session["participant_id"]
+
+    if request.method == "POST":
+        responses = {}
+
+        for q in DEMOGRAPHICS:
+            key = q["key"]
+            val = request.form.get(key)
+            if val is not None:
+                responses[key] = val
+
+        row = DemographicResponse(
+            participant_id=participant_id,
+            created_at_utc=utc_now_str(),
+            responses_json=json.dumps(responses),
+        )
+
+        # one row per participant
+        db.session.merge(row)
+        db.session.commit()
+
+        return redirect(url_for("trial"))
+
+    return render_template(
+        "demographics.html",
+        demographics=DEMOGRAPHICS,
+    )
 
 
 @app.route("/trial", methods=["GET"])
@@ -380,6 +465,17 @@ def submit():
 @app.route("/done", methods=["GET"])
 def done():
     return render_template("done.html")
+
+
+# local only: reset participant_id to allow retaking the study
+@app.route("/reset", methods=["GET"])
+def reset():
+    # Safety: only allow in local dev
+    if not (request.host.startswith("127.0.0.1") or request.host.startswith("localhost")):
+        abort(404)
+
+    session.clear()  # clears participant_id, seed, etc.
+    return redirect(url_for("start"))
 
 
 @app.route("/export.csv", methods=["GET"])
