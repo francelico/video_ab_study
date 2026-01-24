@@ -7,6 +7,7 @@ from typing import Dict, List, Tuple
 
 from flask import Flask, render_template, request, redirect, url_for, session, send_file, abort
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy.exc import IntegrityError
 
 
 # -----------------------------
@@ -63,6 +64,10 @@ db = SQLAlchemy(app)
 # -----------------------------
 class Rating(db.Model):
     __tablename__ = "ratings"
+
+    __table_args__ = (
+        db.UniqueConstraint("participant_id", "trial_index", name="uq_participant_trial"),
+    )
 
     id = db.Column(db.Integer, primary_key=True)
 
@@ -206,6 +211,19 @@ def pick_video(
     return v
 
 
+def participant_seed(participant_id: str) -> int:
+    return int(participant_id[:8], 16)
+
+
+def participant_progress(participant_id: str) -> int:
+    # Number of completed trials
+    return Rating.query.filter_by(participant_id=participant_id).count()
+
+
+def is_completed(participant_id: str) -> bool:
+    return participant_progress(participant_id) >= N_TRIALS_PER_PARTICIPANT
+
+
 def utc_now_str() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -236,14 +254,28 @@ def start():
 
 @app.route("/begin", methods=["POST"])
 def begin():
-    manifest = load_manifest()
-
-    # You can also accept a "participant_code" from the user here if you prefer
     participant_id = session["participant_id"]
 
-    # Deterministic per participant, so refreshes won’t reshuffle mid-study.
-    seed = int(participant_id[:8], 16)
+    if is_completed(participant_id):
+        return redirect(url_for("done"))
 
+    # Optional: keep only the seed in session (tiny), or recompute later.
+    session["seed"] = participant_seed(participant_id)
+    return redirect(url_for("trial"))
+
+
+@app.route("/trial", methods=["GET"])
+def trial():
+    participant_id = session.get("participant_id")
+    if not participant_id:
+        return redirect(url_for("start"))
+
+    if is_completed(participant_id):
+        return redirect(url_for("done"))
+
+    manifest = load_manifest()
+
+    seed = session.get("seed", participant_seed(participant_id))
     trials = generate_trials(
         manifest=manifest,
         n_trials=N_TRIALS_PER_PARTICIPANT,
@@ -252,21 +284,7 @@ def begin():
         counterbalance_sides=True,
     )
 
-    session["trials"] = trials
-    session["current_trial"] = 0
-    return redirect(url_for("trial"))
-
-
-@app.route("/trial", methods=["GET"])
-def trial():
-    trials = session.get("trials")
-    if not trials:
-        return redirect(url_for("start"))
-
-    idx = int(session.get("current_trial", 0))
-    if idx >= len(trials):
-        return redirect(url_for("done"))
-
+    idx = participant_progress(participant_id)
     t = trials[idx]
 
     app.logger.info(
@@ -280,79 +298,82 @@ def trial():
     return render_template(
         "trial.html",
         trial_index=idx,
-        n_trials=len(trials),
+        n_trials=N_TRIALS_PER_PARTICIPANT,
         left=t["left"],
         right=t["right"],
         metrics=METRICS,
     )
 
-
 @app.route("/submit", methods=["POST"])
 def submit():
-    trials = session.get("trials")
-    if not trials:
+    participant_id = session.get("participant_id")
+    if not participant_id:
         return redirect(url_for("start"))
 
-    idx = int(session.get("current_trial", 0))
-    if idx >= len(trials):
+    if is_completed(participant_id):
         return redirect(url_for("done"))
 
+    manifest = load_manifest()
+    seed = session.get("seed", participant_seed(participant_id))
+    trials = generate_trials(
+        manifest=manifest,
+        n_trials=N_TRIALS_PER_PARTICIPANT,
+        seed=seed,
+        allow_video_repeats_within_participant=False,
+        counterbalance_sides=True,
+    )
+
+    idx = participant_progress(participant_id)
     t = trials[idx]
-    participant_id = session["participant_id"]
 
     # Parse metric integers 0..10
     scores_A = {}
     scores_B = {}
-
     for m in METRICS:
         key = m["key"]
-
         raw_A = request.form.get(f"{key}_A")
         raw_B = request.form.get(f"{key}_B")
-
         if raw_A is None or raw_B is None:
             abort(400, f"Missing score for {key}")
-
         val_A = int(raw_A)
         val_B = int(raw_B)
-
         if not (0 <= val_A <= 10 and 0 <= val_B <= 10):
             abort(400, "Scores must be between 0 and 10")
-
         scores_A[key] = val_A
         scores_B[key] = val_B
 
-    # Store one row per trial
+    # Prevent accidental duplicates (e.g., back button / double submit)
+    existing = Rating.query.filter_by(participant_id=participant_id, trial_index=idx).first()
+    if existing is not None:
+        return redirect(url_for("trial"))
+
     row = Rating(
         participant_id=participant_id,
         created_at_utc=utc_now_str(),
         trial_index=idx,
         set_name=t["set"],
-
         method_a=t["left"]["method"],
         method_b=t["right"]["method"],
         video_a=t["left"]["video"],
         video_b=t["right"]["video"],
-
         left_label=t["left"]["label"],
         right_label=t["right"]["label"],
-
         metric_a_A=scores_A["metric_a"],
         metric_b_A=scores_A["metric_b"],
         metric_c_A=scores_A["metric_c"],
         metric_d_A=scores_A["metric_d"],
-
         metric_a_B=scores_B["metric_a"],
         metric_b_B=scores_B["metric_b"],
         metric_c_B=scores_B["metric_c"],
         metric_d_B=scores_B["metric_d"],
     )
-    db.session.add(row)
-    db.session.commit()
 
-    session["current_trial"] = idx + 1
-    if session["current_trial"] >= len(trials):
-        return redirect(url_for("done"))
+    try:
+        db.session.add(row)
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+
     return redirect(url_for("trial"))
 
 
