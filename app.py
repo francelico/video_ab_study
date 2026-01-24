@@ -19,7 +19,7 @@ LOCAL_DIR = os.path.dirname(os.path.abspath(__file__))
 PERSISTENT_STORAGE_DIR = os.environ.get("PERSISTENT_STORAGE_DIR", LOCAL_DIR)   # local dev defaults to repo dir
 DB_PATH = os.path.join(PERSISTENT_STORAGE_DIR, "results.sqlite3")
 MANIFEST_PATH = os.path.join(LOCAL_DIR, "manifest.json")
-EXPORT_TOKEN = os.environ.get("EXPORT_TOKEN", "")
+EXPORT_TOKEN = os.environ.get("EXPORT_TOKEN", "0")  # set EXPORT_TOKEN env variable to a secret value in production
 
 N_TRIALS_PER_PARTICIPANT = 10
 
@@ -380,6 +380,17 @@ def submit():
 @app.route("/done", methods=["GET"])
 def done():
     return render_template("done.html")
+
+
+# local only: reset participant_id to allow retaking the study
+@app.route("/reset", methods=["GET"])
+def reset():
+    # Safety: only allow in local dev
+    if not (request.host.startswith("127.0.0.1") or request.host.startswith("localhost")):
+        abort(404)
+
+    session.clear()  # clears participant_id, seed, etc.
+    return redirect(url_for("start"))
 
 
 @app.route("/export.csv", methods=["GET"])
