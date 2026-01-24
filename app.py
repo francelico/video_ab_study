@@ -17,7 +17,7 @@ LOCAL_DIR = os.path.dirname(os.path.abspath(__file__))
 # Where to store persistent files (SQLite) in production.
 DATA_DIR = os.environ.get("DATA_DIR", LOCAL_DIR)   # local dev defaults to repo dir
 DB_PATH = os.path.join(DATA_DIR, "results.sqlite3")
-MANIFEST_PATH = os.path.join(DATA_DIR, "manifest.json")
+MANIFEST_PATH = os.path.join(LOCAL_DIR, "manifest.json")
 EXPORT_TOKEN = os.environ.get("EXPORT_TOKEN", "")
 
 N_TRIALS_PER_PARTICIPANT = 10
