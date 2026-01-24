@@ -67,6 +67,8 @@ class Rating(db.Model):
 
     trial_index = db.Column(db.Integer, nullable=False)
 
+    set_name = db.Column(db.String(128), nullable=False)
+
     # Which methods were compared, and which video file was shown on each side
     method_a = db.Column(db.String(128), nullable=False)
     method_b = db.Column(db.String(128), nullable=False)
@@ -92,71 +94,85 @@ class Rating(db.Model):
 # -----------------------------
 # Manifest / sampling utilities
 # -----------------------------
-def load_manifest() -> Dict[str, List[str]]:
+def load_manifest() -> Dict[str, Dict[str, List[str]]]:
     with open(MANIFEST_PATH, "r", encoding="utf-8") as f:
         manifest = json.load(f)
 
-    if not isinstance(manifest, dict) or len(manifest) < 2:
-        raise ValueError("manifest.json must be a dict with at least 2 methods")
+    if not isinstance(manifest, dict) or len(manifest) < 1:
+        raise ValueError("manifest.json must be a dict of sets -> methods -> [video paths]")
 
-    # Basic validation: ensure each method has at least 1 video path
-    for method, vids in manifest.items():
-        if not isinstance(vids, list) or len(vids) == 0:
-            raise ValueError(f"Method '{method}' must map to a non-empty list of video paths")
+    for set_name, methods in manifest.items():
+        if not isinstance(methods, dict) or len(methods) < 2:
+            raise ValueError(f"Set '{set_name}' must map to a dict with at least 2 methods")
 
-        # Optional: check files exist under static/
-        for rel_path in vids:
-            abs_path = os.path.join(BASE_DIR, "static", rel_path)
-            if not os.path.isfile(abs_path):
-                raise FileNotFoundError(f"Missing video file for method '{method}': {abs_path}")
+        for method_name, vids in methods.items():
+            if not isinstance(vids, list) or len(vids) == 0:
+                raise ValueError(f"Set '{set_name}', method '{method_name}' must map to a non-empty list")
+
+            for rel_path in vids:
+                abs_path = os.path.join(BASE_DIR, "static", rel_path)
+                if not os.path.isfile(abs_path):
+                    raise FileNotFoundError(
+                        f"Missing video file for set '{set_name}', method '{method_name}': {abs_path}"
+                    )
 
     return manifest
 
 
 def generate_trials(
-    manifest: Dict[str, List[str]],
+    manifest: Dict[str, Dict[str, List[str]]],
     n_trials: int,
     seed: int,
     allow_video_repeats_within_participant: bool = False,
     counterbalance_sides: bool = True,
 ) -> List[dict]:
-    """
-    Generate a list of trial dicts for a participant.
-
-    Constraints:
-      - each trial compares 2 DIFFERENT methods
-      - within a trial, one video sampled from each method
-      - by default, try to avoid reusing the same exact video within a participant
-      - optional side counterbalancing: swap which method appears on left/right
-    """
     rng = random.Random(seed)
 
-    methods = list(manifest.keys())
+    set_names = list(manifest.keys())
+    if len(set_names) == 0:
+        raise ValueError("Manifest has no sets")
+
+    # Tracks used videos to reduce repeats within a participant
     used_videos = set()
 
     trials = []
     for t in range(n_trials):
-        # Pick two distinct methods
-        method_a, method_b = rng.sample(methods, 2)
+        # 1) choose set for this trial
+        set_name = rng.choice(set_names)
 
-        # Pick one video from each method (attempting to avoid repeats)
-        vid_a = pick_video(rng, manifest[method_a], used_videos, allow_video_repeats_within_participant)
-        vid_b = pick_video(rng, manifest[method_b], used_videos, allow_video_repeats_within_participant)
+        methods_dict = manifest[set_name]
+        method_names = list(methods_dict.keys())
+        if len(method_names) < 2:
+            raise ValueError(f"Set '{set_name}' has < 2 methods; cannot create A/B trial")
 
-        # Decide if we swap sides to counterbalance
-        # (side_swap=True means method_a/video_a go to right, method_b/video_b go to left)
-        side_swap = counterbalance_sides and (rng.random() < 0.5)
-        if side_swap:
-            left = {"label": "A", "method": method_b, "video": vid_b}
-            right = {"label": "B", "method": method_a, "video": vid_a}
-        else:
-            left = {"label": "A", "method": method_a, "video": vid_a}
-            right = {"label": "B", "method": method_b, "video": vid_b}
+        # 2) choose two different methods from same set
+        method_left, method_right = rng.sample(method_names, 2)
+
+        # 3) choose one video from each method within the set
+        vid_left = pick_video(
+            rng,
+            methods_dict[method_left],
+            used_videos,
+            allow_video_repeats_within_participant,
+        )
+        vid_right = pick_video(
+            rng,
+            methods_dict[method_right],
+            used_videos,
+            allow_video_repeats_within_participant,
+        )
+
+        # 4) counterbalance which method goes on left/right if desired
+        # (Here "left" and "right" are UI sides; you still label them A/B in UI.)
+        if counterbalance_sides and (rng.random() < 0.5):
+            method_left, method_right = method_right, method_left
+            vid_left, vid_right = vid_right, vid_left
 
         trials.append({
             "trial_index": t,
-            "left": left,
-            "right": right,
+            "set": set_name,
+            "left": {"label": "A", "method": method_left, "video": vid_left},
+            "right": {"label": "B", "method": method_right, "video": vid_right},
         })
 
     return trials
@@ -239,6 +255,15 @@ def trial():
         return redirect(url_for("done"))
 
     t = trials[idx]
+
+    app.logger.info(
+        "Serving trial %d: set=%s | left=%s | right=%s",
+        idx,
+        t.get("set"),
+        t["left"]["video"],
+        t["right"]["video"],
+    )
+
     return render_template(
         "trial.html",
         trial_index=idx,
@@ -289,6 +314,7 @@ def submit():
         participant_id=participant_id,
         created_at_utc=utc_now_str(),
         trial_index=idx,
+        set_name=t["set"],
 
         method_a=t["left"]["method"],
         method_b=t["right"]["method"],
@@ -331,7 +357,7 @@ def export_csv():
     writer = csv.writer(sio)
 
     writer.writerow([
-        "participant_id", "created_at_utc", "trial_index",
+        "participant_id", "created_at_utc", "trial_index", "set_name",
         "method_left", "video_left", "method_right", "video_right",
         "metric_a_left", "metric_b_left", "metric_c_left", "metric_d_left",
         "metric_a_right", "metric_b_right", "metric_c_right", "metric_d_right",
@@ -340,7 +366,7 @@ def export_csv():
     rows = Rating.query.order_by(Rating.participant_id, Rating.trial_index).all()
     for r in rows:
         writer.writerow([
-            r.participant_id, r.created_at_utc, r.trial_index,
+            r.participant_id, r.created_at_utc, r.trial_index, r.set_name,
             r.method_a, r.video_a, r.method_b, r.video_b,
             r.metric_a_A, r.metric_b_A, r.metric_c_A, r.metric_d_A,
             r.metric_a_B, r.metric_b_B, r.metric_c_B, r.metric_d_B,

@@ -3,7 +3,7 @@ import pandas as pd
 df = pd.read_csv("~/Downloads/results.csv")
 
 left = (
-    df[["participant_id", "trial_index", "metric_a_left", "metric_b_left", "metric_c_left", "metric_d_left"]]
+    df[["participant_id", "trial_index", "set_name", "metric_a_left", "metric_b_left", "metric_c_left", "metric_d_left"]]
     .rename(columns={
         "metric_a_left": "metric_a",
         "metric_b_left": "metric_b",
@@ -14,7 +14,7 @@ left = (
 )
 
 right = (
-    df[["participant_id", "trial_index", "metric_a_right", "metric_b_right", "metric_c_right", "metric_d_right"]]
+    df[["participant_id", "trial_index", "set_name", "metric_a_right", "metric_b_right", "metric_c_right", "metric_d_right"]]
     .rename(columns={
         "metric_a_right": "metric_a",
         "metric_b_right": "metric_b",
