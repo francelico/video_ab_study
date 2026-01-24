@@ -15,8 +15,8 @@ from flask_sqlalchemy import SQLAlchemy
 # local deployment
 LOCAL_DIR = os.path.dirname(os.path.abspath(__file__))
 # Where to store persistent files (SQLite) in production.
-DATA_DIR = os.environ.get("DATA_DIR", LOCAL_DIR)   # local dev defaults to repo dir
-DB_PATH = os.path.join(DATA_DIR, "results.sqlite3")
+PERSISTENT_STORAGE_DIR = os.environ.get("PERSISTENT_STORAGE_DIR", LOCAL_DIR)   # local dev defaults to repo dir
+DB_PATH = os.path.join(PERSISTENT_STORAGE_DIR, "results.sqlite3")
 MANIFEST_PATH = os.path.join(LOCAL_DIR, "manifest.json")
 EXPORT_TOKEN = os.environ.get("EXPORT_TOKEN", "")
 
@@ -114,7 +114,7 @@ def load_manifest() -> Dict[str, Dict[str, List[str]]]:
                 raise ValueError(f"Set '{set_name}', method '{method_name}' must map to a non-empty list")
 
             for rel_path in vids:
-                abs_path = os.path.join(DATA_DIR, "static", rel_path)
+                abs_path = os.path.join(LOCAL_DIR, "static", rel_path)
                 if not os.path.isfile(abs_path):
                     raise FileNotFoundError(
                         f"Missing video file for set '{set_name}', method '{method_name}': {abs_path}"
