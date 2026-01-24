@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Background Questions</title>
+    <style>
+        body {
+            max-width: 900px;
+            margin: 40px auto;
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+        }
+
+        .question {
+            margin-bottom: 1.5em;
+        }
+
+        button {
+            margin-top: 2em;
+        }
+    </style>
+</head>
+<body>
+
+<h1>Background Questions</h1>
+
+<p>
+    The following questions are optional and help us better understand the results of this study.
+</p>
+
+<form method="post">
+
+    {% for q in demographics %}
+        <div class="question">
+            <p><strong>{{ q.question }}</strong></p>
+
+            {% for opt in q.options %}
+                <label style="display:block;">
+                    <input type="radio"
+                           name="{{ q.key }}"
+                           value="{{ opt }}">
+                    {{ opt }}
+                </label>
+            {% endfor %}
+        </div>
+    {% endfor %}
+
+    <button type="submit">
+        Continue to study
+    </button>
+
+</form>
+
+</body>
+</html>

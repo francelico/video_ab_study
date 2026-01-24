@@ -125,9 +125,9 @@ curl -H "X-Export-Token: <EXPORT_TOKEN>" https://<host>/export.csv -o results.cs
 - [x] Add remote deployment instructions and test.
 - [x] Protect /export.csv endpoint prior to remote deployment.
 - [x] When running locally, add option to rerun study with a new participant_id. how: go to .../reset to reset the session.
-- [ ] Add study info/description to start.html. Add consent checkbox.
+- [x] Add study info/description to start.html. Add consent checkbox.
 - [ ] Add preliminary.html to explain what we mean by each metric, give a good/bad example for each. Give an example of both games.
-- [ ] Add user_questions.html to ask some demographic questions about the user: Experience with video quality assessment, Prior experience playing Minecraft-like games.
+- [x] Add demographics.html to ask some demographic questions about the user: Experience with video quality assessment, Prior experience playing Minecraft-like games.
 
 ## License
 This project is licensed under the MIT License. See the LICENSE file for details.
