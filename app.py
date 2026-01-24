@@ -12,9 +12,13 @@ from flask_sqlalchemy import SQLAlchemy
 # -----------------------------
 # Configuration
 # -----------------------------
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-MANIFEST_PATH = os.path.join(BASE_DIR, "manifest.json")
-DB_PATH = os.path.join(BASE_DIR, "results.sqlite3")
+# local deployment
+LOCAL_DIR = os.path.dirname(os.path.abspath(__file__))
+# Where to store persistent files (SQLite) in production.
+DATA_DIR = os.environ.get("DATA_DIR", LOCAL_DIR)   # local dev defaults to repo dir
+DB_PATH = os.path.join(DATA_DIR, "results.sqlite3")
+MANIFEST_PATH = os.path.join(DATA_DIR, "manifest.json")
+EXPORT_TOKEN = os.environ.get("EXPORT_TOKEN", "")
 
 N_TRIALS_PER_PARTICIPANT = 10
 
@@ -110,7 +114,7 @@ def load_manifest() -> Dict[str, Dict[str, List[str]]]:
                 raise ValueError(f"Set '{set_name}', method '{method_name}' must map to a non-empty list")
 
             for rel_path in vids:
-                abs_path = os.path.join(BASE_DIR, "static", rel_path)
+                abs_path = os.path.join(DATA_DIR, "static", rel_path)
                 if not os.path.isfile(abs_path):
                     raise FileNotFoundError(
                         f"Missing video file for set '{set_name}', method '{method_name}': {abs_path}"
@@ -204,6 +208,15 @@ def pick_video(
 
 def utc_now_str() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def require_export_token():
+    if not EXPORT_TOKEN:
+        abort(500, "EXPORT_TOKEN is not set on server")
+    # token can be passed as a query param or header
+    token = request.args.get("token") or request.headers.get("X-Export-Token")
+    if token != EXPORT_TOKEN:
+        abort(403)
 
 
 # -----------------------------
@@ -353,6 +366,8 @@ def export_csv():
     import csv
     from io import StringIO, BytesIO
 
+    require_export_token()
+
     sio = StringIO()
     writer = csv.writer(sio)
 
@@ -389,6 +404,7 @@ def init_db():
     with app.app_context():
         db.create_all()
 
+init_db()
 
 if __name__ == "__main__":
     init_db()
