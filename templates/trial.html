@@ -5,116 +5,215 @@
   <title>Trial {{ trial_index + 1 }} / {{ n_trials }}</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
-    body { font-family: system-ui, sans-serif; margin: 1.5rem; }
-    .topbar { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 1rem; }
-    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
-    .panel { border: 1px solid #ddd; padding: 1rem; border-radius: 10px; }
-    video { width: 100%; max-height: 420px; background: #000; }
-    .metric { margin: 0.75rem 0; }
-    .metric label { display: block; font-weight: 600; margin-bottom: 0.25rem; }
-    .metric small { display: block; color: #555; margin-bottom: 0.4rem; }
-    input[type="range"] { width: 100%; }
-    .range-row { display: flex; justify-content: space-between; font-variant-numeric: tabular-nums; }
-    button { padding: 0.6rem 1rem; font-size: 1rem; }
+    body { font-family: system-ui, sans-serif; margin: 1.25rem; }
+
+    /* Keep header layout similar to your prior version (not centered) */
+    .trial-header { margin-bottom: 1rem; }
+    .trial-counter h2 { margin: 0 0 0.25rem 0; }
+    .trial-instructions p { margin: 0.25rem 0; color: #444; }
+
+    /* Use available screen width; keep a reasonable cap for ultra-wide monitors */
+    .page-wrap { width: 100%; max-width: 1600px; margin: 0 auto; }
+
+    .grid-videos {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      align-items: start;
+    }
+    .panel { border: 1px solid #ddd; padding: 1rem; border-radius: 12px; background: #fff; }
+    video { width: 100%; height: min(54vh, 560px); background: #000; border-radius: 10px; }
+
+    /* Rubric / ratings table */
+    .rubric-wrap { margin-top: 1rem; }
+    .rubric {
+      border: 1px solid #ddd;
+      border-radius: 12px;
+      overflow: hidden;
+      background: #fff;
+    }
+
+    .rubric-header {
+      display: grid;
+      grid-template-columns: 2.4fr 1fr 1fr;
+      background: #f7f7f7;
+      border-bottom: 1px solid #ddd;
+      padding: 0.75rem 1rem;
+      align-items: center;
+      font-weight: 650;
+    }
+    .rubric-header .col-video { text-align: center; }
+
+    .metric-row {
+      display: grid;
+      grid-template-columns: 2.4fr 1fr 1fr;
+      padding: 0.95rem 1rem;
+      border-bottom: 1px solid #eee;
+      align-items: center;
+      gap: 0;
+    }
+    .metric-row:last-child { border-bottom: none; }
+
+    .metric-meta .name { font-weight: 650; margin-bottom: 0.2rem; }
+    .metric-meta .desc { color: #555; font-size: 0.95rem; line-height: 1.35; }
+
+    /* Rating "buttons" built from radio inputs + labels */
+    .ratings-cell { display: flex; justify-content: center; }
+
+    .scale {
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+      justify-content: center;
+      flex-wrap: nowrap; /* keep one row */
+    }
+
+    /* Hide the native radio */
+    .scale input[type="radio"] {
+      position: absolute;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .rating-btn {
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      border: 1px solid #ccc;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 650;
+      font-variant-numeric: tabular-nums;
+      cursor: pointer;
+      user-select: none;
+      background: #fff;
+      transition: transform 80ms ease, border-color 80ms ease, box-shadow 80ms ease;
+    }
+
+    .rating-btn:hover {
+      transform: translateY(-1px);
+      border-color: #999;
+    }
+
+    /* Selected state */
+    .scale input[type="radio"]:checked + .rating-btn {
+      border-color: #111;
+      box-shadow: 0 0 0 3px rgba(0,0,0,0.12);
+      background: #f3f3f3;
+    }
+
+    /* Keyboard focus */
+    .scale input[type="radio"]:focus-visible + .rating-btn {
+      outline: 3px solid rgba(0,0,0,0.25);
+      outline-offset: 2px;
+    }
+
+    .scale-hint {
+      color: #666;
+      font-size: 0.9rem;
+      margin: 0.75rem 0 0 0;
+      text-align: right;
+    }
+
     .footer { margin-top: 1rem; display: flex; justify-content: flex-end; }
+    button { padding: 0.6rem 1rem; font-size: 1rem; }
+
+    /* Responsive */
+    @media (max-width: 980px) {
+      .grid-videos { grid-template-columns: 1fr; }
+      video { height: min(45vh, 520px); }
+
+      .rubric-header, .metric-row { grid-template-columns: 1fr; }
+      .rubric-header .col-video { text-align: left; margin-top: 0.5rem; }
+
+      .ratings-cell { justify-content: flex-start; margin-top: 0.5rem; }
+      .scale { justify-content: flex-start; flex-wrap: wrap; } /* allow wrap on narrow screens */
+      .scale-hint { text-align: left; }
+    }
   </style>
 </head>
 <body>
-  <div class="topbar">
-    <h2>Trial {{ trial_index + 1 }} / {{ n_trials }}</h2>
-    <div>Rate after watching both videos.</div>
-  </div>
+  <div class="page-wrap">
+    <div class="trial-header">
+      <div class="trial-counter">
+        <h2>Trial {{ trial_index + 1 }} of {{ n_trials }}</h2>
+      </div>
 
-  <div class="grid">
-    <div class="panel">
-      <h3>Video {{ left.label }}</h3>
-      <video controls preload="metadata">
-        <source src="{{ url_for('static', filename=left.video) }}" type="video/mp4" />
-        Your browser does not support the video tag.
-      </video>
+      <div class="trial-instructions">
+        <p><strong>Please watch both videos before providing your ratings.</strong></p>
+        <p>
+          If a video does not load, try refreshing the page.
+          If the issue persists, you may assign zero scores for that video
+          and continue to the next trial.
+        </p>
+      </div>
     </div>
 
-    <div class="panel">
-      <h3>Video {{ right.label }}</h3>
-      <video controls preload="metadata">
-        <source src="{{ url_for('static', filename=right.video) }}" type="video/mp4" />
-        Your browser does not support the video tag.
-      </video>
-    </div>
-  </div>
-
-  <form method="post" action="{{ url_for('submit') }}">
-    <div class="grid" style="margin-top: 1rem;">
-
-      <!-- Video A ratings -->
+    <div class="grid-videos">
       <div class="panel">
-        <h3>Ratings for Video {{ left.label }}</h3>
+        <h3>Video {{ left.label }}</h3>
+        <video controls preload="metadata">
+          <source src="{{ url_for('static', filename=left.video) }}" type="video/mp4" />
+          Your browser does not support the video tag.
+        </video>
+      </div>
+
+      <div class="panel">
+        <h3>Video {{ right.label }}</h3>
+        <video controls preload="metadata">
+          <source src="{{ url_for('static', filename=right.video) }}" type="video/mp4" />
+          Your browser does not support the video tag.
+        </video>
+      </div>
+    </div>
+
+    <form method="post" action="{{ url_for('submit') }}" class="rubric-wrap">
+      <div class="rubric">
+        <div class="rubric-header">
+          <div>Metric</div>
+          <div class="col-video">Video {{ left.label }}</div>
+          <div class="col-video">Video {{ right.label }}</div>
+        </div>
 
         {% for m in metrics %}
-          <div class="metric">
-            <label>{{ m.name }}</label>
-            <small>{{ m.desc }}</small>
+          <div class="metric-row">
+            <div class="metric-meta">
+              <div class="name">{{ m.name }}</div>
+              <div class="desc">{{ m.desc }}</div>
+            </div>
 
-            <input
-              type="range"
-              name="{{ m.key }}_A"
-              min="0"
-              max="10"
-              step="1"
-              value="5"
-              oninput="document.getElementById('{{ m.key }}_A_val').textContent = this.value;"
-              required
-            />
+            <div class="ratings-cell">
+              <div class="scale" role="radiogroup" aria-label="{{ m.name }} for Video {{ left.label }}">
+                {% for s in range(0, 6) %}
+                  <label>
+                    <input type="radio" name="{{ m.key }}_A" value="{{ s }}" required>
+                    <span class="rating-btn">{{ s }}</span>
+                  </label>
+                {% endfor %}
+              </div>
+            </div>
 
-            <div class="range-row">
-              <span>0</span>
-              <span>
-                Selected:
-                <strong id="{{ m.key }}_A_val">5</strong>
-              </span>
-              <span>10</span>
+            <div class="ratings-cell">
+              <div class="scale" role="radiogroup" aria-label="{{ m.name }} for Video {{ right.label }}">
+                {% for s in range(0, 6) %}
+                  <label>
+                    <input type="radio" name="{{ m.key }}_B" value="{{ s }}" required>
+                    <span class="rating-btn">{{ s }}</span>
+                  </label>
+                {% endfor %}
+              </div>
             </div>
           </div>
         {% endfor %}
       </div>
 
-      <!-- Video B ratings -->
-      <div class="panel">
-        <h3>Ratings for Video {{ right.label }}</h3>
+      <p class="scale-hint">Scale: 0 = lowest, 5 = highest</p>
 
-        {% for m in metrics %}
-          <div class="metric">
-            <label>{{ m.name }}</label>
-            <small>{{ m.desc }}</small>
-
-            <input
-              type="range"
-              name="{{ m.key }}_B"
-              min="0"
-              max="10"
-              step="1"
-              value="5"
-              oninput="document.getElementById('{{ m.key }}_B_val').textContent = this.value;"
-              required
-            />
-
-            <div class="range-row">
-              <span>0</span>
-              <span>
-                Selected:
-                <strong id="{{ m.key }}_B_val">5</strong>
-              </span>
-              <span>10</span>
-            </div>
-          </div>
-        {% endfor %}
+      <div class="footer">
+        <button type="submit">Next</button>
       </div>
-
-    </div>
-
-    <div class="footer">
-      <button type="submit">Next</button>
-    </div>
-  </form>
+    </form>
+  </div>
 </body>
 </html>

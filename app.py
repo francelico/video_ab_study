@@ -26,7 +26,7 @@ N_TRIALS_PER_PARTICIPANT = int(os.environ.get("N_TRIALS_PER_PARTICIPANT", 10))
 # Demographics
 DEMOGRAPHICS = [
     {
-        "key": "AI_exp",
+        "key": "ai_exp",
         "question": "Do you work or study in AI or machine learning?",
         "options": [
             "Yes",
@@ -67,23 +67,23 @@ DEMOGRAPHICS = [
 METRICS = [
     {
         "key": "metric_a",
-        "name": "Visual Quality and Realism",
-        "desc": "Short description of metric A."
+        "name": "Visual Quality and 3D consistency",
+        "desc": "Visual quality and spatial consistency of the 3D scene. Deduct points for visual artifacts such as blurriness, color shifts, texture inconsistencies, or objects whose appearance changes unnaturally when viewed from different viewpoints."
     },
     {
         "key": "metric_b",
         "name": "Temporal Consistency",
-        "desc": "Short description of metric B."
+        "desc": "Stability and consistency of the scene over time. Deduct points if parts of the scene do not remain consistent as the video progresses, particularly when the player revisits areas that were shown earlier."
     },
     {
         "key": "metric_c",
-        "name": "Controllability",
-        "desc": "Short description of metric C."
+        "name": "Motion and Interaction Plausibility",
+        "desc": "Plausibility of player motion and interactions with the environment. Deduct points for unrealistic movement (e.g. clipping through solid objects, floating, or missing collisions). Also deduct points if the environment’s dynamics appear to degrade or become unnaturally simplified (e.g. a transition from a complex scene towards overly flat or uniform terrain)."
     },
     {
         "key": "metric_d",
         "name": "Overall Quality Score",
-        "desc": "Short description of metric D."
+        "desc": "Your subjective rating of the overall quality of the video."
     }
 ]
 
@@ -130,7 +130,7 @@ class Rating(db.Model):
     left_label = db.Column(db.String(8), nullable=False)   # "A"
     right_label = db.Column(db.String(8), nullable=False)  # "B"
 
-    # Three integer metrics 0-10
+    # Three integer metrics 0-5
     metric_a_A = db.Column(db.Integer, nullable=False)
     metric_b_A = db.Column(db.Integer, nullable=False)
     metric_c_A = db.Column(db.Integer, nullable=False)
@@ -276,6 +276,10 @@ def participant_progress(participant_id: str) -> int:
     return Rating.query.filter_by(participant_id=participant_id).count()
 
 
+def has_demographics(participant_id: str) -> bool:
+    return DemographicResponse.query.filter_by(participant_id=participant_id).first() is not None
+
+
 def is_completed(participant_id: str) -> bool:
     return participant_progress(participant_id) >= N_TRIALS_PER_PARTICIPANT
 
@@ -314,13 +318,23 @@ def begin():
     if is_completed(participant_id):
         return redirect(url_for("done"))
 
-    # Optional: keep only the seed in session (tiny), or recompute later.
     session["seed"] = participant_seed(participant_id)
+    # If demographics already filled, do not ask again
+    if has_demographics(participant_id):
+        return redirect(url_for("trial"))
+
     return redirect(url_for("demographics"))
 
 @app.route("/demographics", methods=["GET", "POST"])
 def demographics():
     participant_id = session["participant_id"]
+
+    if is_completed(participant_id):
+        return redirect(url_for("done"))
+
+    # If already answered, skip
+    if request.method == "GET" and has_demographics(participant_id):
+        return redirect(url_for("trial"))
 
     if request.method == "POST":
         responses = {}
@@ -411,7 +425,7 @@ def submit():
     idx = participant_progress(participant_id)
     t = trials[idx]
 
-    # Parse metric integers 0..10
+    # Parse metric integers 0..5
     scores_A = {}
     scores_B = {}
     for m in METRICS:
@@ -422,8 +436,8 @@ def submit():
             abort(400, f"Missing score for {key}")
         val_A = int(raw_A)
         val_B = int(raw_B)
-        if not (0 <= val_A <= 10 and 0 <= val_B <= 10):
-            abort(400, "Scores must be between 0 and 10")
+        if not (0 <= val_A <= 5 and 0 <= val_B <= 5):
+            abort(400, "Scores must be between 0 and 5")
         scores_A[key] = val_A
         scores_B[key] = val_B
 
@@ -481,9 +495,22 @@ def reset():
 @app.route("/export.csv", methods=["GET"])
 def export_csv():
     import csv
+    import json
     from io import StringIO, BytesIO
 
     require_export_token()
+
+    # Demographic columns are defined by the global DEMOGRAPHICS list
+    demo_keys = [q["key"] for q in DEMOGRAPHICS]
+
+    # Load demographics once, build a participant_id -> dict map
+    demo_rows = DemographicResponse.query.all()
+    demo_by_pid = {}
+    for d in demo_rows:
+        try:
+            demo_by_pid[d.participant_id] = json.loads(d.responses_json or "{}")
+        except json.JSONDecodeError:
+            demo_by_pid[d.participant_id] = {}
 
     sio = StringIO()
     writer = csv.writer(sio)
@@ -493,15 +520,18 @@ def export_csv():
         "method_left", "video_left", "method_right", "video_right",
         "metric_a_left", "metric_b_left", "metric_c_left", "metric_d_left",
         "metric_a_right", "metric_b_right", "metric_c_right", "metric_d_right",
+        *demo_keys,  # one column per demographic key
     ])
 
     rows = Rating.query.order_by(Rating.participant_id, Rating.trial_index).all()
     for r in rows:
+        demo = demo_by_pid.get(r.participant_id, {})
         writer.writerow([
             r.participant_id, r.created_at_utc, r.trial_index, r.set_name,
             r.method_a, r.video_a, r.method_b, r.video_b,
             r.metric_a_A, r.metric_b_A, r.metric_c_A, r.metric_d_A,
             r.metric_a_B, r.metric_b_B, r.metric_c_B, r.metric_d_B,
+            *[demo.get(k, "") for k in demo_keys],
         ])
 
     # Convert to bytes for send_file

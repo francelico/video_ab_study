@@ -18,6 +18,11 @@
         button {
             margin-top: 2em;
         }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
     </style>
 </head>
 <body>
@@ -25,10 +30,10 @@
 <h1>Background Questions</h1>
 
 <p>
-    The following questions are optional and help us better understand the results of this study.
+    The following questions help us better understand the results of this study. Please answer all questions before continuing.
 </p>
 
-<form method="post">
+<form method="post" id="demo-form">
 
     {% for q in demographics %}
         <div class="question">
@@ -36,20 +41,44 @@
 
             {% for opt in q.options %}
                 <label style="display:block;">
-                    <input type="radio"
-                           name="{{ q.key }}"
-                           value="{{ opt }}">
+                    <input
+                        type="radio"
+                        name="{{ q.key }}"
+                        value="{{ opt }}"
+                        class="demo-input">
                     {{ opt }}
                 </label>
             {% endfor %}
         </div>
     {% endfor %}
 
-    <button type="submit">
+    <button type="submit" id="continue-btn" disabled>
         Continue to study
     </button>
 
 </form>
+
+<script>
+    const inputs = document.querySelectorAll(".demo-input");
+    const button = document.getElementById("continue-btn");
+
+    function checkComplete() {
+        const names = new Set();
+        inputs.forEach(i => names.add(i.name));
+
+        for (const name of names) {
+            if (!document.querySelector(`input[name="${name}"]:checked`)) {
+                button.disabled = true;
+                return;
+            }
+        }
+        button.disabled = false;
+    }
+
+    inputs.forEach(i => {
+        i.addEventListener("change", checkComplete);
+    });
+</script>
 
 </body>
 </html>
