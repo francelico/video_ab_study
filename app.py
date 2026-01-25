@@ -17,8 +17,9 @@ from sqlalchemy.exc import IntegrityError
 LOCAL_DIR = os.path.dirname(os.path.abspath(__file__))
 # Where to store persistent files (SQLite) in production.
 PERSISTENT_STORAGE_DIR = os.environ.get("PERSISTENT_STORAGE_DIR", LOCAL_DIR)   # local dev defaults to repo dir
-DB_PATH = os.path.join(PERSISTENT_STORAGE_DIR, "results.sqlite3")
-MANIFEST_PATH = os.path.join(LOCAL_DIR, "manifest.json")
+STATIC_DIR = os.path.join(PERSISTENT_STORAGE_DIR, "static") # where static files are stored in production
+DB_PATH = os.path.join(PERSISTENT_STORAGE_DIR, "results.sqlite3") # SQLite DB path
+MANIFEST_PATH = os.path.join(STATIC_DIR, "manifest.json")
 EXPORT_TOKEN = os.environ.get("EXPORT_TOKEN", "0")  # set EXPORT_TOKEN env variable to a secret value in production
 CONTACT_INFO= os.environ.get("CONTACT_INFO", "CONTACT")
 N_TRIALS_PER_PARTICIPANT = int(os.environ.get("N_TRIALS_PER_PARTICIPANT", 10))
@@ -91,7 +92,7 @@ METRICS = [
 # -----------------------------
 # App / DB setup
 # -----------------------------
-app = Flask(__name__, static_folder="static", template_folder="templates")
+app = Flask(__name__, static_folder=STATIC_DIR, template_folder="templates")
 # For production: set this via environment variable and keep it secret
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "dev-secret-change-me")
 app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{DB_PATH}"
@@ -123,7 +124,7 @@ class Rating(db.Model):
     method_a = db.Column(db.String(128), nullable=False)
     method_b = db.Column(db.String(128), nullable=False)
 
-    video_a = db.Column(db.String(512), nullable=False)  # relative path under static/
+    video_a = db.Column(db.String(512), nullable=False)
     video_b = db.Column(db.String(512), nullable=False)
 
     # To support counterbalancing / auditing
@@ -175,7 +176,7 @@ def load_manifest() -> Dict[str, Dict[str, List[str]]]:
                 raise ValueError(f"Set '{set_name}', method '{method_name}' must map to a non-empty list")
 
             for rel_path in vids:
-                abs_path = os.path.join(LOCAL_DIR, "static", rel_path)
+                abs_path = os.path.join(STATIC_DIR, rel_path)
                 if not os.path.isfile(abs_path):
                     raise FileNotFoundError(
                         f"Missing video file for set '{set_name}', method '{method_name}': {abs_path}"
