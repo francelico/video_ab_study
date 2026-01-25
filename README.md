@@ -4,19 +4,19 @@ Minimal webapp to run a user study on A/B random pairing of videos.
 ## Setup
 1. Clone the repository
 2. Install dependencies: `pip install -r requirements.txt`
-3. Add video files to `static/videos/` and specify directory structure in `static/manifest.json`.
 
 ## Running the App locally
-1. Run the app: `python app.py`
-2. Access the app at `http://localhost:5000` in your web browser and fill in the survey.
-3. After the study, generate `result.csv` by accessing `http://localhost:5000/export.csv`. It will be downloaded to your local machine.
-4. Open `result.csv` to see the collected data or run `result_processing.py` to start processing it.
-5. To reset the study for a new participant, go to `http://localhost:5000/reset`.
+1. Add video files to `static/videos/` and specify directory structure in `static/manifest.json`.
+2. Run the app: `python app.py`
+3. Access the app at `http://localhost:5000` in your web browser and fill in the survey.
+4. After the study, generate `result.csv` by accessing `http://localhost:5000/export.csv?token=0`. It will be downloaded to your local machine.
+5. Open `result.csv` to see the collected data or run `result_processing.py` to start processing it.
+6. To reset the study for a new participant, go to `http://localhost:5000/reset`.
 
-## Configuration
-- `static/manifest.json`: Define the video pairings and methods here.
+## Repository Structure
 - `templates/`: HTML templates for the web pages.
-- `app.py`: Main Flask application file. You can modify the `METRICS` and `N_TRIALS_PER_PARTICIPANT` variables to customize the study.
+- `app.py`: Main Flask application file. Feel free to modify the `DEMOGRAPHICS` and `METRICS` variables to customize the study.
+- `result_processing.py`: Demo script to process the collected results.
 
 ## Deployment Instructions
 
@@ -35,11 +35,18 @@ This application is designed to run as a standard Python web service with persis
 
 The following environment variables must be set when running the application in production:
 
-| Variable                 | Description                                                                     |
-| ------------------------ | ------------------------------------------------------------------------------- |
-| `SECRET_KEY`             | Secret key used to sign Flask session cookies. Must be a stable, private value. |
-| `PERSISTENT_STORAGE_DIR` | Path to a writable directory where `results.sqlite3` will be stored.            |
-| `EXPORT_TOKEN`           | Secret token required to access the `/export.csv` endpoint.                     |
+| Variable                  | Description                                                                     |
+|---------------------------| ------------------------------------------------------------------------------- |
+| `SECRET_KEY`              | Secret key used to sign Flask session cookies. Must be a stable, private value. |
+| `PERSISTENT_STORAGE_DIR`  | Path to a writable directory where `results.sqlite3` will be stored.            |
+| `EXPORT_TOKEN`            | Secret token required to access the `/export.csv` endpoint.                     |
+
+You may also set the following variables to customize the study:
+
+| Variable                   | Description                                                                   |
+|----------------------------|-------------------------------------------------------------------------------|
+| `N_TRIALS_PER_PARTICIPANT` | How many trials to run per participant.                                       |
+| `CONTACT_INFO`             | Contact information to display on start.html (e.g. Name, Institution, email). |
 
 Example:
 
@@ -47,7 +54,23 @@ Example:
 export SECRET_KEY="long-random-string"
 export PERSISTENT_STORAGE_DIR="/path/to/persistent/storage"
 export EXPORT_TOKEN="another-long-random-string"
+export N_TRIALS_PER_PARTICIPANT=10
+export CONTACT_INFO="Dr. Jane Doe, University X, jane.doe@science.edu"
 ```
+
+---
+
+### Dataset
+
+* The static directory is loaded from 
+
+  ```
+  $PERSISTENT_STORAGE_DIR/static
+  ``` 
+
+* Only the videos with paths listed in `$PERSISTENT_STORAGE_DIR/static/manifest.json` will be served by the application.
+
+* Follow the template in `static/manifest.json` to set up your own `$PERSISTENT_STORAGE_DIR/static` directory containing `manifest.json` and video files.
 
 ---
 
@@ -64,8 +87,6 @@ The application uses SQLite for storing study results.
 * Tables are created on startup if they do not already exist.
 
 * The database directory must exist and be writable by the application process.
-
-Only the database is stored in persistent storage; static assets (videos, templates, code) are read from the application directory.
 
 ---
 
@@ -88,7 +109,7 @@ Notes:
 
 ### Exporting results
 
-Results can be downloaded as CSV via:
+Results can be downloaded as CSV via accessing the endpoint:
 
 ```
 /export.csv
@@ -96,10 +117,16 @@ Results can be downloaded as CSV via:
 
 Access is protected by the `EXPORT_TOKEN`.
 
-Example:
+Download `result.csv` from the command line:
 
 ```bash
 curl -H "X-Export-Token: <EXPORT_TOKEN>" https://<host>/export.csv -o results.csv
+```
+
+OR From a web browser, add the token as a query parameter to download `result.csv` to your local machine:
+
+```
+https://<host>/export.csv?token=<EXPORT_TOKEN>
 ```
 
 ---
