@@ -4,7 +4,7 @@ Minimal webapp to run a user study on A/B random pairing of videos.
 ## Setup
 1. Clone the repository
 2. Install dependencies: `pip install -r requirements.txt`
-3. Add video files to `static/videos/` and specify directory structure in `manifest.json`.
+3. Add video files to `static/videos/` and specify directory structure in `static/manifest.json`.
 
 ## Running the App locally
 1. Run the app: `python app.py`
@@ -14,7 +14,7 @@ Minimal webapp to run a user study on A/B random pairing of videos.
 5. To reset the study for a new participant, go to `http://localhost:5000/reset`.
 
 ## Configuration
-- `manifest.json`: Define the video pairings and methods here.
+- `static/manifest.json`: Define the video pairings and methods here.
 - `templates/`: HTML templates for the web pages.
 - `app.py`: Main Flask application file. You can modify the `METRICS` and `N_TRIALS_PER_PARTICIPANT` variables to customize the study.
 
