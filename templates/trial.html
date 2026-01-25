@@ -20,9 +20,19 @@
   </style>
 </head>
 <body>
-  <div class="topbar">
-    <h2>Trial {{ trial_index + 1 }} / {{ n_trials }}</h2>
-    <div>Rate after watching both videos.</div>
+  <div class="trial-header">
+    <div class="trial-counter">
+      <h2> Trial {{ trial_index + 1 }} of {{ n_trials }} </h2>
+    </div>
+
+    <div class="trial-instructions">
+      <h4>Please watch both videos before providing your ratings.</h4>
+      <h4>
+        If a video does not load, try refreshing the page.
+        If the issue persists, you may assign zero scores for that video
+        and continue to the next trial.
+      </h4>
+    </div>
   </div>
 
   <div class="grid">
@@ -59,7 +69,7 @@
               type="range"
               name="{{ m.key }}_A"
               min="0"
-              max="10"
+              max="5"
               step="1"
               value="5"
               oninput="document.getElementById('{{ m.key }}_A_val').textContent = this.value;"
@@ -72,7 +82,7 @@
                 Selected:
                 <strong id="{{ m.key }}_A_val">5</strong>
               </span>
-              <span>10</span>
+              <span>5</span>
             </div>
           </div>
         {% endfor %}
@@ -91,7 +101,7 @@
               type="range"
               name="{{ m.key }}_B"
               min="0"
-              max="10"
+              max="5"
               step="1"
               value="5"
               oninput="document.getElementById('{{ m.key }}_B_val').textContent = this.value;"
@@ -104,7 +114,7 @@
                 Selected:
                 <strong id="{{ m.key }}_B_val">5</strong>
               </span>
-              <span>10</span>
+              <span>5</span>
             </div>
           </div>
         {% endfor %}
