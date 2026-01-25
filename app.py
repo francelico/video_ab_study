@@ -426,7 +426,7 @@ def submit():
     idx = participant_progress(participant_id)
     t = trials[idx]
 
-    # Parse metric integers 0..5
+    # Parse metric integers 0..5. 0 indicates the user rated "n/a" for that metric.
     scores_A = {}
     scores_B = {}
     for m in METRICS:

@@ -144,7 +144,7 @@
         <p><strong>Please watch both videos before providing your ratings.</strong></p>
         <p>
           If a video does not load, try refreshing the page.
-          If the issue persists, you may assign zero scores for that video
+          If the issue persists, you may select "n/a" for all metrics for that specific video,
           and continue to the next trial.
         </p>
       </div>
@@ -188,7 +188,7 @@
                 {% for s in range(0, 6) %}
                   <label>
                     <input type="radio" name="{{ m.key }}_A" value="{{ s }}" required>
-                    <span class="rating-btn">{{ s }}</span>
+                    <span class="rating-btn">{{ 'n/a' if s == 0 else s }}</span>
                   </label>
                 {% endfor %}
               </div>
@@ -199,7 +199,7 @@
                 {% for s in range(0, 6) %}
                   <label>
                     <input type="radio" name="{{ m.key }}_B" value="{{ s }}" required>
-                    <span class="rating-btn">{{ s }}</span>
+                    <span class="rating-btn">{{ 'n/a' if s == 0 else s }}</span>
                   </label>
                 {% endfor %}
               </div>
@@ -208,7 +208,7 @@
         {% endfor %}
       </div>
 
-      <p class="scale-hint">Scale: 0 = lowest, 5 = highest</p>
+      <p class="scale-hint">Scale: 1 = lowest, 5 = highest</p>
 
       <div class="footer">
         <button type="submit">Next</button>
