@@ -68,7 +68,7 @@ DEMOGRAPHICS = [
 METRICS = [
     {
         "key": "metric_a",
-        "name": "Visual Quality and 3D consistency",
+        "name": "Visual Quality and 3D Consistency",
         "desc": "Visual quality and spatial consistency of the 3D scene. Deduct points for visual artifacts such as blurriness, color shifts, texture inconsistencies, or objects whose appearance changes unnaturally when viewed from different viewpoints."
     },
     {
