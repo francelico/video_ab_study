@@ -79,7 +79,7 @@ METRICS = [
     {
         "key": "metric_c",
         "name": "Motion and Interaction Plausibility",
-        "desc": "Plausibility of player motion and interactions with the environment. Deduct points for unrealistic movement (e.g. clipping through solid objects, floating, or missing collisions). Also deduct points if the environment’s dynamics appear to degrade or become unnaturally simplified (e.g. a transition from a complex scene towards overly flat or uniform terrain)."
+        "desc": "Plausibility of player motion and interactions with the environment. Deduct points for unrealistic movement (e.g. player passing through solid objects or floating). Also deduct points if the environment’s dynamics appear to degrade or become unnaturally simplified (e.g. a transition from a complex scene towards overly flat or uniform terrain)."
     },
     {
         "key": "metric_d",
