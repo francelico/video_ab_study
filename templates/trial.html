@@ -7,12 +7,10 @@
   <style>
     body { font-family: system-ui, sans-serif; margin: 1.25rem; }
 
-    /* Keep header layout similar to your prior version (not centered) */
     .trial-header { margin-bottom: 1rem; }
     .trial-counter h2 { margin: 0 0 0.25rem 0; }
     .trial-instructions p { margin: 0.25rem 0; color: #444; }
 
-    /* Use available screen width; keep a reasonable cap for ultra-wide monitors */
     .page-wrap { width: 100%; max-width: 1600px; margin: 0 auto; }
 
     .grid-videos {
@@ -24,7 +22,29 @@
     .panel { border: 1px solid #ddd; padding: 1rem; border-radius: 12px; background: #fff; }
     video { width: 100%; height: min(54vh, 560px); background: #000; border-radius: 10px; }
 
-    /* Rubric / ratings table */
+    .video-fail {
+      margin-top: 0.75rem;
+      display: flex;
+      justify-content: center;
+    }
+    .fail-btn {
+      padding: 0.55rem 0.8rem;
+      border-radius: 10px;
+      border: 1px solid #cfcfcf;
+      background: #fff;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    .fail-btn[aria-pressed="true"] {
+      border-color: #111;
+      background: #f3f3f3;
+      box-shadow: 0 0 0 3px rgba(0,0,0,0.12);
+    }
+    .fail-note {
+      color: #666;
+      font-size: 0.9rem;
+    }
+
     .rubric-wrap { margin-top: 1rem; }
     .rubric {
       border: 1px solid #ddd;
@@ -57,7 +77,6 @@
     .metric-meta .name { font-weight: 650; margin-bottom: 0.2rem; }
     .metric-meta .desc { color: #555; font-size: 0.95rem; line-height: 1.35; }
 
-    /* Rating "buttons" built from radio inputs + labels */
     .ratings-cell { display: flex; justify-content: center; }
 
     .scale {
@@ -65,10 +84,9 @@
       gap: 0.5rem;
       align-items: center;
       justify-content: center;
-      flex-wrap: nowrap; /* keep one row */
+      flex-wrap: nowrap;
     }
 
-    /* Hide the native radio */
     .scale input[type="radio"] {
       position: absolute;
       opacity: 0;
@@ -96,14 +114,12 @@
       border-color: #999;
     }
 
-    /* Selected state */
     .scale input[type="radio"]:checked + .rating-btn {
       border-color: #111;
       box-shadow: 0 0 0 3px rgba(0,0,0,0.12);
       background: #f3f3f3;
     }
 
-    /* Keyboard focus */
     .scale input[type="radio"]:focus-visible + .rating-btn {
       outline: 3px solid rgba(0,0,0,0.25);
       outline-offset: 2px;
@@ -119,7 +135,6 @@
     .footer { margin-top: 1rem; display: flex; justify-content: flex-end; }
     button { padding: 0.6rem 1rem; font-size: 1rem; }
 
-    /* Responsive */
     @media (max-width: 980px) {
       .grid-videos { grid-template-columns: 1fr; }
       video { height: min(45vh, 520px); }
@@ -128,7 +143,7 @@
       .rubric-header .col-video { text-align: left; margin-top: 0.5rem; }
 
       .ratings-cell { justify-content: flex-start; margin-top: 0.5rem; }
-      .scale { justify-content: flex-start; flex-wrap: wrap; } /* allow wrap on narrow screens */
+      .scale { justify-content: flex-start; flex-wrap: wrap; }
       .scale-hint { text-align: left; }
     }
   </style>
@@ -143,9 +158,9 @@
       <div class="trial-instructions">
         <p><strong>Please watch both videos before providing your ratings.</strong></p>
         <p>
-          If a video does not load, try refreshing the page.
-          If the issue persists, you may select "n/a" for all metrics for that specific video,
-          and continue to the next trial.
+            Please rate both videos for each metric before continuing.<br>
+            If a video doesn’t load, try refreshing the page.<br>
+            If the problem persists, click <strong>“The video did not load”</strong> under that video — you’ll then be able to continue without rating it.
         </p>
       </div>
     </div>
@@ -157,6 +172,13 @@
           <source src="{{ url_for('static', filename=left.video) }}" type="video/mp4" />
           Your browser does not support the video tag.
         </video>
+
+        <!-- NEW -->
+        <div class="video-fail">
+          <button type="button" class="fail-btn" id="failA" aria-pressed="false">
+            The video did not load
+          </button>
+        </div>
       </div>
 
       <div class="panel">
@@ -165,10 +187,21 @@
           <source src="{{ url_for('static', filename=right.video) }}" type="video/mp4" />
           Your browser does not support the video tag.
         </video>
+
+        <!-- NEW -->
+        <div class="video-fail">
+          <button type="button" class="fail-btn" id="failB" aria-pressed="false">
+            The video did not load
+          </button>
+        </div>
       </div>
     </div>
 
-    <form method="post" action="{{ url_for('submit') }}" class="rubric-wrap">
+    <form method="post" action="{{ url_for('submit') }}" class="rubric-wrap" id="rubricForm">
+      <!-- NEW: hidden flags you can also read server-side if useful -->
+      <input type="hidden" name="video_A_failed" id="video_A_failed" value="0">
+      <input type="hidden" name="video_B_failed" id="video_B_failed" value="0">
+
       <div class="rubric">
         <div class="rubric-header">
           <div>Metric</div>
@@ -177,18 +210,23 @@
         </div>
 
         {% for m in metrics %}
+          <!-- NEW: hidden fallbacks for each metric/video (used when video didn't load) -->
+          <input type="hidden" name="{{ m.key }}_A_missing" id="{{ m.key }}_A_missing" value="">
+          <input type="hidden" name="{{ m.key }}_B_missing" id="{{ m.key }}_B_missing" value="">
+
           <div class="metric-row">
             <div class="metric-meta">
               <div class="name">{{ m.name }}</div>
-              <div class="desc">{{ m.desc }}</div>
+              <div class="desc">{{ m.desc | safe }}</div>
             </div>
 
             <div class="ratings-cell">
               <div class="scale" role="radiogroup" aria-label="{{ m.name }} for Video {{ left.label }}">
-                {% for s in range(0, 6) %}
+                <!-- CHANGED: 1..5 only -->
+                {% for s in range(1, 6) %}
                   <label>
                     <input type="radio" name="{{ m.key }}_A" value="{{ s }}" required>
-                    <span class="rating-btn">{{ 'n/a' if s == 0 else s }}</span>
+                    <span class="rating-btn">{{ s }}</span>
                   </label>
                 {% endfor %}
               </div>
@@ -196,10 +234,11 @@
 
             <div class="ratings-cell">
               <div class="scale" role="radiogroup" aria-label="{{ m.name }} for Video {{ right.label }}">
-                {% for s in range(0, 6) %}
+                <!-- CHANGED: 1..5 only -->
+                {% for s in range(1, 6) %}
                   <label>
                     <input type="radio" name="{{ m.key }}_B" value="{{ s }}" required>
-                    <span class="rating-btn">{{ 'n/a' if s == 0 else s }}</span>
+                    <span class="rating-btn">{{ s }}</span>
                   </label>
                 {% endfor %}
               </div>
@@ -215,5 +254,80 @@
       </div>
     </form>
   </div>
+
+  <!-- NEW: behavior -->
+  <script>
+    (function () {
+      const form = document.getElementById("rubricForm");
+
+      function setVideoFailed(videoSuffix, failed) {
+        // videoSuffix: "A" or "B"
+        const flag = document.getElementById(`video_${videoSuffix}_failed`);
+        flag.value = failed ? "1" : "0";
+
+        // For each metric: if failed -> set hidden to 0 and remove required on radios
+        // If un-failed -> clear hidden and restore required (unless you prefer optional)
+        const hiddenSelector = `input[type="hidden"][name$="_${videoSuffix}_missing"]`;
+        const hiddenInputs = form.querySelectorAll(hiddenSelector);
+
+        hiddenInputs.forEach((h) => {
+          h.value = failed ? "0" : "";
+        });
+
+        // toggle required on the actual radio inputs for that video
+        const radios = form.querySelectorAll(`input[type="radio"][name$="_${videoSuffix}"]`);
+        radios.forEach((r) => {
+          if (failed) {
+            r.required = false;
+            r.checked = false; // avoid sending mixed signals
+            r.disabled = true; // optional: prevent accidental clicking
+          } else {
+            r.disabled = false;
+            r.required = true;
+          }
+        });
+      }
+
+      function toggleBtn(btnId, videoSuffix) {
+        const btn = document.getElementById(btnId);
+        btn.addEventListener("click", () => {
+          const currentlyPressed = btn.getAttribute("aria-pressed") === "true";
+          const nextPressed = !currentlyPressed;
+          btn.setAttribute("aria-pressed", nextPressed ? "true" : "false");
+          setVideoFailed(videoSuffix, nextPressed);
+        });
+      }
+
+      toggleBtn("failA", "A");
+      toggleBtn("failB", "B");
+
+      // On submit, if a video failed, ensure we submit 0 for each metric for that video.
+      // We do this by copying *_missing into the canonical names if no radio value will be sent.
+      form.addEventListener("submit", (e) => {
+        ["A", "B"].forEach((suffix) => {
+          const failed = document.getElementById(`video_${suffix}_failed`).value === "1";
+          if (!failed) return;
+
+          // For each metric hidden, inject a hidden input with the real field name set to 0
+          const missingHiddens = form.querySelectorAll(`input[type="hidden"][name$="_${suffix}_missing"]`);
+          missingHiddens.forEach((mh) => {
+            const realName = mh.name.replace(`_${suffix}_missing`, `_${suffix}`);
+
+            // Remove any existing injected value first (id-based)
+            const injectedId = `injected_${realName}`;
+            const existing = document.getElementById(injectedId);
+            if (existing) existing.remove();
+
+            const injected = document.createElement("input");
+            injected.type = "hidden";
+            injected.name = realName;
+            injected.value = "0";
+            injected.id = injectedId;
+            form.appendChild(injected);
+          });
+        });
+      });
+    })();
+  </script>
 </body>
 </html>

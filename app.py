@@ -68,23 +68,29 @@ DEMOGRAPHICS = [
 METRICS = [
     {
         "key": "metric_a",
-        "name": "Visual Quality and 3D Consistency",
-        "desc": "Visual quality and spatial consistency of the 3D scene. Deduct points for visual artifacts such as blurriness, color shifts, texture inconsistencies, or objects whose appearance changes unnaturally when viewed from different viewpoints."
+        "name": "Visual Fidelity",
+        "desc": "Per-frame <strong>visual quality</strong> of the video. Deduct points for <strong>visual artifacts</strong> such as "
+            "blurriness, color shifts, flickering, noise, or texture degradation."
     },
     {
         "key": "metric_b",
-        "name": "Temporal Consistency",
-        "desc": "Stability and consistency of the scene over time. Deduct points if parts of the scene do not remain consistent as the video progresses, particularly when the player revisits areas that were shown earlier."
+        "name": "3D Spatial Consistency",
+        "desc": "<strong>Spatial consistency</strong> of the scene. Deduct points if <strong>objects deform, "
+            "shift, or change appearance</strong> when viewed from different camera angles, or if the relative "
+            "depth and <strong>spatial relationships between objects</strong> appear inconsistent as the player moves."
     },
     {
         "key": "metric_c",
-        "name": "Motion and Interaction Plausibility",
-        "desc": "Plausibility of player motion and interactions with the environment. Deduct points for unrealistic movement (e.g. player passing through solid objects or floating). Also deduct points if the environment’s dynamics appear to degrade or become unnaturally simplified (e.g. a transition from a complex scene towards overly flat or uniform terrain)."
+        "name": "Temporal Environment Stability and Consistency",
+        "desc":  "Consistency of the environment <strong>over time</strong>. Deduct points if the scene changes "
+            "unexpectedly, such as objects disappearing, reappearing, or changing "
+            "structure when revisiting previously seen areas, or if the <strong>environment "
+            "degrades</strong> or becomes unnaturally simplified over time."
     },
     {
         "key": "metric_d",
         "name": "Overall Quality Score",
-        "desc": "Your subjective rating of the overall quality of the video."
+        "desc": "Your subjective rating of the <strong>overall quality</strong> of the video, considering all factors above."
     }
 ]
 
