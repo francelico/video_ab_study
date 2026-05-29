@@ -6,6 +6,7 @@ import math
 import re
 import matplotlib.pyplot as plt
 from matplotlib.colors import Normalize
+from scipy import stats
 
 from app import METRICS as METRICS_DEF
 
@@ -42,6 +43,235 @@ WELCH_TEST_B = {
 METRICS = [m["key"] for m in METRICS_DEF]
 METRIC_NAME = {m["key"]: m["name"] for m in METRICS_DEF}
 
+DEMOGRAPHIC_COLS = ["ai_exp", "game_exp", "minecraft_exp", "minetest_exp"]
+
+def significance_marker(p: float) -> str:
+    if pd.isna(p):
+        return ""
+    if p < 0.001:
+        return "***"
+    if p < 0.01:
+        return "**"
+    if p < 0.05:
+        return "*"
+    return "ns"
+
+
+def welch_test_micro_average(
+    long: pd.DataFrame,
+    *,
+    metrics: list[str],
+    methods_a: set[str],
+    methods_b: set[str],
+) -> pd.DataFrame:
+    """
+    Perform Welch's t-test on the micro-average samples used in section (2a).
+
+    For every metric and every pair (a, b) with:
+        a in methods_a
+        b in methods_b
+
+    compare all per-rating observations for method a against all per-rating
+    observations for method b using:
+        stats.ttest_ind(xa, xb, equal_var=False)
+
+    Returns a long-form dataframe with one row per (metric, method_a, method_b).
+    """
+    rows = []
+
+    # Restrict to methods involved in the requested comparisons
+    allowed_methods = sorted(set(methods_a).union(set(methods_b)))
+    sub = long[long["method"].isin(allowed_methods)].copy()
+
+    for metric in metrics:
+        for a in sorted(methods_a):
+            for b in sorted(methods_b):
+                xa = pd.to_numeric(
+                    sub.loc[sub["method"] == a, metric],
+                    errors="coerce"
+                ).dropna()
+
+                xb = pd.to_numeric(
+                    sub.loc[sub["method"] == b, metric],
+                    errors="coerce"
+                ).dropna()
+
+                n_a = int(xa.shape[0])
+                n_b = int(xb.shape[0])
+
+                mean_a = float(xa.mean()) if n_a > 0 else np.nan
+                mean_b = float(xb.mean()) if n_b > 0 else np.nan
+                delta = mean_a - mean_b if n_a > 0 and n_b > 0 else np.nan
+
+                if n_a >= 2 and n_b >= 2:
+                    t_stat, p_val = stats.ttest_ind(
+                        xa,
+                        xb,
+                        equal_var=False,
+                        nan_policy="omit",
+                    )
+                    t_stat = float(t_stat)
+                    p_val = float(p_val)
+                else:
+                    t_stat = np.nan
+                    p_val = np.nan
+
+                rows.append(
+                    {
+                        "metric": metric,
+                        "metric_name": METRIC_NAME.get(metric, metric),
+                        "method_a": a,
+                        "method_a_name": METHODS_DEF.get(a, a),
+                        "method_b": b,
+                        "method_b_name": METHODS_DEF.get(b, b),
+                        "mean_a": mean_a,
+                        "mean_b": mean_b,
+                        "delta_a_minus_b": delta,
+                        "n_a": n_a,
+                        "n_b": n_b,
+                        "t_stat": t_stat,
+                        "p_value": p_val,
+                        "significance": significance_marker(p_val),
+                    }
+                )
+
+    return pd.DataFrame(rows)
+
+
+def format_welch_results_for_display(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Nicely formatted display table for console printing.
+    """
+    if df is None or len(df) == 0:
+        return pd.DataFrame()
+
+    out = df.copy()
+    out["comparison"] = out["method_a_name"] + " vs " + out["method_b_name"]
+
+    cols = [
+        "metric_name",
+        "comparison",
+        "mean_a",
+        "mean_b",
+        "delta_a_minus_b",
+        "n_a",
+        "n_b",
+        "t_stat",
+        "p_value",
+        "significance",
+    ]
+    out = out[cols].rename(
+        columns={
+            "metric_name": "Metric",
+            "comparison": "Comparison",
+            "mean_a": "Mean A",
+            "mean_b": "Mean B",
+            "delta_a_minus_b": "Δ(A-B)",
+            "n_a": "N_A",
+            "n_b": "N_B",
+            "t_stat": "t",
+            "p_value": "p",
+            "significance": "Sig",
+        }
+    )
+
+    return out
+
+def extract_unique_participant_demographics(
+    df: pd.DataFrame,
+    demographic_cols: list[str],
+) -> pd.DataFrame:
+    """
+    Extract one demographic response per unique participant_id.
+
+    For each participant and each demographic column, take the first non-null
+    value observed in time order. This is robust even if the same information
+    is repeated on every row.
+    """
+    if "participant_id" not in df.columns:
+        raise ValueError("participant_id column not found in CSV")
+
+    work = df.copy()
+
+    # Prefer earliest response if timestamps are available
+    sort_cols = []
+    if "created_at_utc" in work.columns:
+        work["_created_at_utc_ts"] = pd.to_datetime(work["created_at_utc"], errors="coerce", utc=True)
+        sort_cols.append("_created_at_utc_ts")
+    if "trial_index" in work.columns:
+        sort_cols.append("trial_index")
+
+    if sort_cols:
+        work = work.sort_values(["participant_id"] + sort_cols, kind="mergesort")
+
+    def first_non_null(series: pd.Series):
+        x = series.dropna()
+        if len(x) == 0:
+            return np.nan
+        return x.iloc[0]
+
+    agg = {col: first_non_null for col in demographic_cols if col in work.columns}
+    demo = work.groupby("participant_id", dropna=False).agg(agg).reset_index()
+
+    if "_created_at_utc_ts" in demo.columns:
+        demo = demo.drop(columns=["_created_at_utc_ts"], errors="ignore")
+
+    return demo
+
+
+def demographic_distribution_table(
+    participants_demo: pd.DataFrame,
+    col: str,
+) -> pd.DataFrame:
+    """
+    Return count and percentage distribution for one demographic question.
+    Percentages are over unique participants.
+    """
+    if col not in participants_demo.columns:
+        raise ValueError(f"Missing demographic column: {col}")
+
+    total = int(participants_demo["participant_id"].nunique())
+
+    counts = (
+        participants_demo[col]
+        .fillna("Missing")
+        .value_counts(dropna=False)
+        .rename_axis("response")
+        .reset_index(name="count")
+    )
+
+    counts["percent"] = 100.0 * counts["count"] / total if total > 0 else np.nan
+    counts["percent_str"] = counts["percent"].map(lambda x: f"{x:.1f}%" if pd.notna(x) else "--")
+    return counts
+
+
+def format_demographic_summary_text(
+    participants_demo: pd.DataFrame,
+    demographic_cols: list[str],
+) -> str:
+    """
+    Create a text summary of demographic distributions for each question.
+    """
+    total = int(participants_demo["participant_id"].nunique())
+    lines = []
+    lines.append("=== Participant demographics ===")
+    lines.append(f"Unique participants with demographic data: {total}")
+    lines.append("")
+
+    for col in demographic_cols:
+        if col not in participants_demo.columns:
+            continue
+
+        dist = demographic_distribution_table(participants_demo, col)
+        lines.append(f"--- {col} ---")
+        for _, row in dist.iterrows():
+            resp = str(row["response"])
+            count = int(row["count"])
+            pct = row["percent_str"]
+            lines.append(f"{resp}: {count} ({pct})")
+        lines.append("")
+
+    return "\n".join(lines)
 
 # -----------------------------
 # Helper: parse method base name
@@ -602,6 +832,8 @@ def main():
     tables_f = open(tables_path, "w", encoding="utf-8")
 
     df = pd.read_csv(args.csv)
+    df_raw = df.copy()
+
     # -----------------------------
     # FIRST THING: remove first N trials/rows per participant by created_at_utc
     # This affects *all* downstream analyses (head-to-head, long-form, etc.)
@@ -634,6 +866,41 @@ def main():
             f"\n=== Removed first {args.remove_first_n_ratings} trials per participant "
             f"(by created_at_utc): {before - after} rows removed ==="
         )
+
+    # -----------------------------
+    # Demographics summary
+    # Only include participants who submitted more than
+    # args.remove_first_n_ratings total ratings in the original data
+    # -----------------------------
+    participant_counts = (
+        df_raw.groupby("participant_id")
+        .size()
+        .rename("n_submitted")
+        .reset_index()
+    )
+
+    eligible_participants = set(
+        participant_counts.loc[
+            participant_counts["n_submitted"] > args.remove_first_n_ratings,
+            "participant_id",
+        ]
+    )
+
+    demo_source = df_raw[df_raw["participant_id"].isin(eligible_participants)].copy()
+
+    participants_demo = extract_unique_participant_demographics(demo_source, DEMOGRAPHIC_COLS)
+    demographics_text = format_demographic_summary_text(participants_demo, DEMOGRAPHIC_COLS)
+
+    print("\n" + demographics_text)
+
+    demographics_txt_path = "demographics_summary.txt"
+    with open(demographics_txt_path, "w", encoding="utf-8") as f:
+        f.write(demographics_text)
+    print(f"Saved demographics summary to {demographics_txt_path}")
+
+    demographics_csv_path = "participant_demographics.csv"
+    participants_demo.to_csv(demographics_csv_path, index=False)
+    print(f"Saved unique participant demographics to {demographics_csv_path}")
 
     # ---- print head-to-head comparison count matrix ----
     h2h = head_to_head_counts(df)
@@ -788,6 +1055,28 @@ def main():
     table_overall = format_table_methods_x_metrics(by_method_overall, verbose=args.verbose, n_kind="n")
     print("\n=== (2a) Scores averaged across all trials by method (micro-average) ===")
     print(table_overall.to_string(index=False))
+
+    # -----------------------------
+    welch_df = welch_test_micro_average(
+        long,
+        metrics=METRICS,
+        methods_a=WELCH_TEST_A,
+        methods_b=WELCH_TEST_B,
+    )
+
+    welch_display = format_welch_results_for_display(welch_df)
+
+    print("\n=== (2a, Welch) Pairwise Welch's t-tests on micro-average samples ===")
+    print("Convention: H0 = equal means; reported delta is mean(A) - mean(B)\n")
+
+    for metric_name, g in welch_display.groupby("Metric", sort=False):
+        print(f"--- metric: {metric_name} ---")
+        print(g.drop(columns=["Metric"]).to_string(index=False))
+        print()
+
+    welch_csv_path = "welch_tests_micro.csv"
+    welch_df.to_csv(welch_csv_path, index=False)
+    print(f"Saved Welch test results to {welch_csv_path}")
 
     # -----------------------------
     # (2b) Macro-average across sets by method (mean ± SE across sets)
